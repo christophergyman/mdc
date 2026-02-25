@@ -238,18 +238,21 @@ class CalibrationView(NSView):
 class CalibrationController:
     """Manages the calibration window and data collection process."""
 
-    def __init__(self, gaze_estimator, webcam_capture, on_complete, on_cancel=None):
+    def __init__(self, gaze_estimator, webcam_capture, on_complete,
+                 on_cancel=None, on_open_settings=None):
         """
         Args:
             gaze_estimator: GazeEstimator instance
             webcam_capture: cv2.VideoCapture instance
             on_complete: callback(success: bool) called when calibration finishes
             on_cancel: optional callback() if user cancels
+            on_open_settings: optional callback() to open settings window
         """
         self.estimator = gaze_estimator
         self.capture = webcam_capture
         self.on_complete = on_complete
         self.on_cancel = on_cancel
+        self.on_open_settings = on_open_settings
 
         screen = NSScreen.mainScreen()
         self.screen_frame = screen.frame()
@@ -270,6 +273,7 @@ class CalibrationController:
         self._timer = None
         self._accept_button = None
         self._redo_button = None
+        self._settings_button = None
 
     def _setup_window(self):
         """Create the fullscreen calibration window."""
@@ -288,6 +292,15 @@ class CalibrationController:
         self.view = CalibrationView.alloc().initWithFrame_(self.screen_frame)
         self.view._phase = "instructions"
         self.window.setContentView_(self.view)
+
+        # Settings button — shown on instructions and results screens
+        if self.on_open_settings:
+            self._settings_button = NSButton.alloc().initWithFrame_(((20, 20), (100, 32)))
+            self._settings_button.setTitle_("\u2699 Settings")
+            self._settings_button.setBezelStyle_(NSBezelStyleRounded)
+            self._settings_button.setTarget_(self)
+            self._settings_button.setAction_(objc.selector(self._on_settings, signature=b"v@:@"))
+            self.view.addSubview_(self._settings_button)
 
     def start(self):
         """Begin the calibration sequence."""
@@ -320,12 +333,22 @@ class CalibrationController:
             # Don't start calibration on Escape — that's handled by _handle_escape_event
             if hasattr(event, 'keyCode') and event.keyCode() == 53:
                 return event
+            # Don't start calibration when clicking the settings button
+            if (self._settings_button
+                    and event.type() == AppKit.NSEventTypeLeftMouseDown):
+                loc = event.locationInWindow()
+                btn_frame = self._settings_button.frame()
+                if AppKit.NSPointInRect(loc, btn_frame):
+                    return event
             self.state = "animating"
             self.state_start_time = time.time()
             self.current_point_idx = 0
             self.view._phase = "calibrating"
             self.view._instruction_text = "Keep your head still and look at each dot"
             self._update_target_position()
+            # Hide settings button during active calibration
+            if self._settings_button:
+                self._settings_button.setHidden_(True)
             AppKit.NSEvent.removeMonitor_(self._event_monitor)
             self._event_monitor = None
         return event
@@ -480,9 +503,18 @@ class CalibrationController:
         self.view._mean_error_pct = mean_error_pct
         self.view._show_warning = mean_error_pct > 5.0
 
+        # Show settings button on results screen
+        if self._settings_button:
+            self._settings_button.setHidden_(False)
+
         # Add Accept/Redo buttons
         self._add_result_buttons()
         self.view.setNeedsDisplay_(True)
+
+    def _on_settings(self, sender):
+        """Open the settings window."""
+        if self.on_open_settings:
+            self.on_open_settings()
 
     def _add_result_buttons(self):
         """Add Accept and Redo buttons to the results screen."""

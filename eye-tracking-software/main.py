@@ -12,6 +12,7 @@ from AppKit import (
     NSAlertStyleCritical, NSAlertStyleWarning, NSStatusBar,
     NSImage, NSColor, NSFont, NSTextField,
     NSWindowStyleMaskBorderless, NSBackingStoreBuffered,
+    NSFloatingWindowLevel,
 )
 
 from settings import Settings
@@ -170,6 +171,7 @@ class AppDelegate(NSObject):
             gaze_estimator=self.estimator,
             webcam_capture=self.capture,
             on_complete=self._on_calibration_complete,
+            on_open_settings=self._open_settings_from_calibration,
         )
         self.calibration.start()
 
@@ -339,11 +341,26 @@ class AppDelegate(NSObject):
     @objc.IBAction
     def showSettings_(self, sender):
         """Show or create the settings window."""
+        self._ensure_settings_window()
+        self.settings_window.window.setLevel_(AppKit.NSFloatingWindowLevel)
+        self.settings_window.show()
+
+    def _ensure_settings_window(self):
+        """Create the settings window if it doesn't exist yet."""
         if self.settings_window is None:
             self.settings_window = SettingsWindowController(
                 self.settings,
                 on_settings_changed=self._on_settings_changed,
             )
+
+    def _open_settings_from_calibration(self):
+        """Open settings window from the calibration screen.
+
+        The calibration window sits at NSStatusWindowLevel, so we must
+        raise the settings window above it.
+        """
+        self._ensure_settings_window()
+        self.settings_window.window.setLevel_(AppKit.NSStatusWindowLevel + 1)
         self.settings_window.show()
 
     @objc.IBAction
