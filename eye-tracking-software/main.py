@@ -104,17 +104,38 @@ class AppDelegate(NSObject):
     # --- Camera ---
 
     def _open_camera(self):
-        """Open the webcam. Returns True on success."""
-        self.capture = cv2.VideoCapture(0)
+        """Open the webcam using current settings. Returns True on success."""
+        device_index = self.settings.camera_device_index
+        self.capture = cv2.VideoCapture(device_index)
         if not self.capture.isOpened():
             self._show_camera_error()
             return False
 
-        # Set resolution and frame rate
-        self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        self.capture.set(cv2.CAP_PROP_FPS, 30)
+        # Apply resolution and frame rate from settings
+        self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.settings.camera_resolution_w)
+        self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.settings.camera_resolution_h)
+        self.capture.set(cv2.CAP_PROP_FPS, self.settings.camera_fps)
         return True
+
+    def _switch_camera(self):
+        """Switch to a different camera or apply new resolution/fps.
+
+        Stops tracking, releases the old capture, opens the new device,
+        and triggers recalibration (different camera = different FOV).
+        """
+        was_tracking = self.is_tracking
+        self._stop_tracking()
+
+        if self.capture:
+            self.capture.release()
+            self.capture = None
+
+        if not self._open_camera():
+            return
+
+        # Different camera or resolution invalidates calibration
+        if was_tracking:
+            self._start_calibration()
 
     def _show_camera_error(self):
         """Show camera access error dialog."""
@@ -351,7 +372,16 @@ class AppDelegate(NSObject):
 
     def _on_settings_changed(self, new_settings):
         """Called when settings are changed in the settings window."""
+        old = self.settings
         self.settings = new_settings
+
+        # Detect camera config changes that require a device switch
+        camera_changed = (
+            old.camera_device_index != new_settings.camera_device_index
+            or old.camera_resolution_w != new_settings.camera_resolution_w
+            or old.camera_resolution_h != new_settings.camera_resolution_h
+            or old.camera_fps != new_settings.camera_fps
+        )
 
         if self.overlay:
             self.overlay.update_settings(new_settings)
@@ -363,6 +393,9 @@ class AppDelegate(NSObject):
             self._show_webcam_preview()
         elif self.webcam_preview:
             self.webcam_preview.hide()
+
+        if camera_changed:
+            self._switch_camera()
 
     def _on_panel_position_changed(self, x, y):
         """Save confidence panel position."""

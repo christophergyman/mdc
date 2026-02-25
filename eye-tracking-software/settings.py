@@ -22,6 +22,12 @@ class Settings:
     hotkey_display: str = "Cmd+Shift+G"
     show_webcam_preview: bool = False
     show_fps: bool = True
+    camera_device_index: int = 0
+    camera_device_name: str = ""
+    camera_resolution_w: int = 640
+    camera_resolution_h: int = 480
+    camera_fps: int = 30
+    auto_recalibrate_prompt: bool = True
     confidence_panel_x: float = 50.0
     confidence_panel_y: float = 50.0
     webcam_preview_x: float = 100.0

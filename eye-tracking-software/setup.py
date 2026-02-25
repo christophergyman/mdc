@@ -10,7 +10,7 @@ OPTIONS = {
     'plist': 'Info.plist',
     'packages': [
         'cv2', 'mediapipe', 'sklearn', 'numpy',
-        'objc', 'AppKit', 'Foundation', 'Quartz',
+        'objc', 'AppKit', 'Foundation', 'Quartz', 'AVFoundation',
         'pynput',
     ],
     'includes': [
